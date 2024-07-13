@@ -106,10 +106,10 @@ def apply_preprocessor(preprocessor: ColumnTransformer, X_train: pd.DataFrame, X
     encoder = preprocessor.named_transformers_['cat']['onehot']
     encoded_cols = encoder.get_feature_names_out()
 
-    input_cols = preprocessor.transformers_[0][2] + list(encoded_cols)
+    input_cols = list(preprocessor.transformers[0][2]) + list(encoded_cols)
     scaler = preprocessor.named_transformers_['num']['scaler']
 
-    return pd.DataFrame(np.round(X_train_processed, 2), columns=input_cols), pd.DataFrame(np.round(X_val_processed, 2), columns=input_cols), input_cols, scaler, encoder
+    return pd.DataFrame(X_train_processed, columns=input_cols), pd.DataFrame(X_val_processed, columns=input_cols), input_cols, scaler, encoder
 
 def preprocess_data(raw_df: pd.DataFrame, excluded_cols: List[str]) -> Dict[str, Any]:
     """
@@ -154,10 +154,18 @@ def preprocess_new_data(new_data: pd.DataFrame, input_cols: List[str], scaler: O
     """
     new_data = drop_columns(new_data, excluded_cols)
     numeric_cols, categorical_cols = identify_columns(new_data, excluded_cols)
-    preprocessor = create_preprocessor(numeric_cols, categorical_cols)
-    new_data_processed = preprocessor.transform(new_data)
-    
-    return pd.DataFrame(np.round(new_data_processed, 2), columns=input_cols)
+
+    # Scale numeric features
+    new_data[numeric_cols] = scaler.transform(new_data[numeric_cols])
+
+    # Encode categorical features
+    encoded_cats = encoder.transform(new_data[categorical_cols])
+    encoded_cats_df = pd.DataFrame(encoded_cats, columns=encoder.get_feature_names_out(categorical_cols))
+
+    # Combine numeric and encoded categorical features
+    new_data_processed = pd.concat([new_data[numeric_cols].reset_index(drop=True), encoded_cats_df.reset_index(drop=True)], axis=1)
+
+    return pd.DataFrame(new_data_processed, columns=input_cols)
 
 def main_process_data(raw_df: pd.DataFrame, excluded_cols: List[str]) -> Dict[str, Any]:
     """
